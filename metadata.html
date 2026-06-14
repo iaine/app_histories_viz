@@ -72,6 +72,7 @@
       <div class="modes" id="modes"></div>
       <span class="count" id="count"></span>
       <span style="flex:1"></span>
+      <button class="reset" id="csv">Export CSV</button>
       <button class="reset" id="reset">Clear</button>
     </div>
     <div id="panel"></div>
@@ -201,6 +202,32 @@ function comparison(ms,mount){
   mount.innerHTML=html;
 }
 
+// ---- CSV export (mirrors calls/metadata.py CSV_COLUMNS) ----
+const CSV_COLUMNS=["pkg","applicationname","android_name","version_code",
+  "permission_count","sensitive_permission_count","language_count",
+  "ab_sdk_count","activity_count","permissions","sensitive_permissions",
+  "languages","ab_sdks"];
+function csvRow(m){
+  const sens=m.perms.filter(p=>DANGEROUS.has(p));
+  return {pkg:m.pkg,applicationname:m.name,android_name:m.version,
+    version_code:m.code||"",permission_count:m.perms.length,
+    sensitive_permission_count:sens.length,language_count:m.langs.length,
+    ab_sdk_count:m.ab.length,activity_count:m.acts.length,
+    permissions:m.perms.join(";"),sensitive_permissions:sens.join(";"),
+    languages:m.langs.join(";"),ab_sdks:m.ab.join(";")};
+}
+function exportCSV(){
+  if(!RECORDS.length) return;
+  const rows=RECORDS.map(norm).map(csvRow);
+  const esc=v=>{v=String(v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  const lines=[CSV_COLUMNS.join(",")].concat(
+    rows.map(r=>CSV_COLUMNS.map(c=>esc(r[c])).join(",")));
+  const blob=new Blob([lines.join("\n")+"\n"],{type:"text/csv"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="metadata_"+(rows.length===1?rows[0].pkg:rows.length+"_apps")+".csv";
+  a.click(); URL.revokeObjectURL(a.href);
+}
 // ---- driver ----
 function draw(){
   const view=document.getElementById("view");
@@ -227,6 +254,7 @@ function addFiles(files){Promise.all([...files].map(f=>f.text().then(t=>{
   try{RECORDS.push(...ingest(t));}catch(e){}}))).then(draw);}
 const drop=document.getElementById("drop"),fi=document.getElementById("file");
 drop.onclick=()=>fi.click(); fi.onchange=e=>addFiles(e.target.files);
+document.getElementById("csv").onclick=exportCSV;
 document.getElementById("reset").onclick=()=>{RECORDS=[];MODE="auto";
   document.getElementById("view").hidden=true;};
 ["dragover","dragenter"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
